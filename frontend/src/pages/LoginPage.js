@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './LoginPage.css';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-// Helper function to decode JWT
 const decodeJWT = (token) => {
   try {
     const base64Url = token.split('.')[1];
@@ -14,7 +13,6 @@ const decodeJWT = (token) => {
     }).join(''));
     return JSON.parse(jsonPayload);
   } catch (err) {
-    console.error('Failed to decode JWT:', err);
     return null;
   }
 };
@@ -37,8 +35,6 @@ export default function LoginPage({ onLogin }) {
       });
 
       const token = response.data.access_token;
-      
-      // Decode JWT to get role
       const decoded = decodeJWT(token);
       const role = decoded?.role || 'EMPLOYEE';
       

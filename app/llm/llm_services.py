@@ -1,12 +1,20 @@
-from google import genai
+import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+try:
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    client = None  
+except Exception as e:
+    client = None
 
 def generate_response(question: str, personal_data: str, policy_context: str):
+    if client is None:
+        if policy_context.strip():
+            return policy_context
+        return ""
 
     prompt = f"""
 You are an intelligent HR assistant.
@@ -40,7 +48,13 @@ Follow these STRICT rules:
    - "No information found in policy"
    UNLESS rule 5 applies.
 
-7. Keep the answer short, professional, and clear.
+7. **IMPORTANT: Be CONCISE and extract ONLY relevant details from the policy.**
+   - Extract only the specific information requested, not entire sections.
+   - Use bullet points for clarity.
+   - Remove unnecessary or generic text.
+   - Keep answers short and focused.
+
+8. Keep the answer short, professional, and clear.
 
 ---
 
@@ -56,12 +70,14 @@ HR Policy Context:
 Answer:
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config={
-            "temperature": 0.1
-        }
-    )
-
-    return response.text.strip()
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={
+                "temperature": 0.1
+            }
+        )
+        return response.text.strip()
+    except Exception as e:
+        return personal_data

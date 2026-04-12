@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export default function HRManagementPage({ user }) {
   const [pendingLeaves, setPendingLeaves] = useState([]);
@@ -38,7 +38,7 @@ export default function HRManagementPage({ user }) {
         setPendingLeaves(response.data);
       }
     } catch (err) {
-      console.error('Failed to load pending leaves:', err);
+      // Handle error silently
     } finally {
       setLoading(false);
     }
@@ -53,7 +53,6 @@ export default function HRManagementPage({ user }) {
       fetchPendingLeaves();
       setTimeout(() => setFormMessage(''), 3000);
     } catch (err) {
-      console.error('Approve leave error:', err.response?.data || err.message);
       const errorMsg = err.response?.data?.detail || 'Failed to approve leave';
       setFormMessage(errorMsg);
       setTimeout(() => setFormMessage(''), 5000);
@@ -69,7 +68,6 @@ export default function HRManagementPage({ user }) {
       fetchPendingLeaves();
       setTimeout(() => setFormMessage(''), 3000);
     } catch (err) {
-      console.error('Reject leave error:', err.response?.data || err.message);
       const errorMsg = err.response?.data?.detail || 'Failed to reject leave';
       setFormMessage(errorMsg);
       setTimeout(() => setFormMessage(''), 5000);

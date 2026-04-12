@@ -52,5 +52,3 @@ def process_policy(file_path: str, filename: str):
                     "chunk": i
                 }]
             )
-
-    print("Indexed successfully")

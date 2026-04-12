@@ -52,10 +52,8 @@ def request_leave(
             if not employee:
                 raise HTTPException(status_code=404, detail="HR employee profile not found")
 
-    # Calculate number of days requested
     days_requested = (data.end_date - data.start_date).days + 1
     
-    # Check leave balance based on leave type
     if data.leave_type == "CASUAL":
         remaining = employee.casual_total - employee.casual_taken
         leave_type_name = "Casual"

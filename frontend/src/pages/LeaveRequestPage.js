@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export default function LeaveRequestPage({ user }) {
   const [formData, setFormData] = useState({
@@ -17,7 +17,6 @@ export default function LeaveRequestPage({ user }) {
   const isHR = user.role === 'HR';
 
   useEffect(() => {
-    // Fetch leave balance for display
     const fetchLeaveBalance = async () => {
       try {
         const response = await axios.get(`${API_URL}/user/profile`, {
@@ -25,7 +24,6 @@ export default function LeaveRequestPage({ user }) {
         });
         setLeaveBalance(response.data.leave_balance);
       } catch (error) {
-        console.error('Failed to fetch leave balance:', error);
       }
     };
     fetchLeaveBalance();

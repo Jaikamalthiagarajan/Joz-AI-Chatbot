@@ -75,6 +75,21 @@ def extract_days(question: str):
 def extract_date(question: str):
 
     q = question.lower()
+    today = date.today()
+
+    if 'tomorrow' in q or 'next day' in q:
+        return today + timedelta(days=1)
+    if 'today' in q:
+        return today
+    if 'day after tomorrow' in q:
+        return today + timedelta(days=2)
+    if 'next week' in q:
+        return today + timedelta(weeks=1)
+    if 'next monday' in q:
+        days_ahead = 0 - today.weekday()  
+        if days_ahead <= 0: 
+            days_ahead += 7
+        return today + timedelta(days=days_ahead)
 
     month_map = {
         "january":1, "february":2, "march":3, "april":4,
@@ -87,7 +102,7 @@ def extract_date(question: str):
     match3 = re.search(r'(\d{1,2})[/-](\d{1,2})', q)
 
     try:
-        year = datetime.today().year
+        year = today.year
 
         if match1:
             day = int(match1.group(1))
@@ -116,6 +131,13 @@ def extract_employee_name(question: str):
         candidate = match.group(2)
         if re.search(r'^\d+(st|nd|rd|th)?$', candidate):
             return None
+        if candidate in ['me', 'myself', 'i', 'my', 'mine']:
+            return None
+        if candidate in ['tomorrow', 'today', 'yesterday', 'week', 'month', 'year', 
+                         'day', 'next', 'last', 'monday', 'tuesday', 'wednesday', 'thursday', 
+                         'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april',
+                         'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']:
+            return None
         return candidate
     return None
 
@@ -140,21 +162,32 @@ def get_leave_statistics(db: Session, year: int = None):
             LeaveRequest.start_date <= year_end
         ).all()
         
-        total_days_taken = sum([
-            (leave.end_date - leave.start_date).days + 1 
-            for leave in leaves_taken
-        ])
+        casual_days = 0
+        sick_days = 0
+        earned_days = 0
+        
+        for leave in leaves_taken:
+            days = (leave.end_date - leave.start_date).days + 1
+            leave_type = leave.leave_type.upper()
+            if leave_type == "CASUAL":
+                casual_days += days
+            elif leave_type == "SICK":
+                sick_days += days
+            elif leave_type == "EARNED":
+                earned_days += days
+        
+        total_days_taken = casual_days + sick_days + earned_days
         
         stats.append({
             "username": user.username,
             "employee_id": emp.id,
             "total_days_taken": total_days_taken,
-            "casual_taken": emp.casual_taken,
-            "sick_taken": emp.sick_taken,
-            "earned_taken": emp.earned_taken,
-            "casual_available": emp.casual_total - emp.casual_taken,
-            "sick_available": emp.sick_total - emp.sick_taken,
-            "earned_available": emp.earned_total - emp.earned_taken,
+            "casual_taken": casual_days,
+            "sick_taken": sick_days,
+            "earned_taken": earned_days,
+            "casual_available": emp.casual_total - casual_days,
+            "sick_available": emp.sick_total - sick_days,
+            "earned_available": emp.earned_total - earned_days,
         })
     
     return sorted(stats, key=lambda x: x["total_days_taken"], reverse=True)
@@ -246,48 +279,27 @@ def query_policy(
             most_change = most_leaves['total_days_taken'] - most_prev_days
             least_change = least_leaves['total_days_taken'] - least_prev_days
             
-            answer = f"""
-
-         LEAVE TRENDS & ANALYTICS REPORT - {current_year}              
+            answer = f"""LEAVE TRENDS & ANALYTICS REPORT - {current_year}
 
 SECTION 1: CURRENT YEAR LEAVE CONSUMPTION ({current_year})
 
+HIGHEST LEAVE CONSUMER
+  Employee: {most_leaves['username'].upper()}
+  Total Days: {most_leaves['total_days_taken']} days
+  Casual: {most_leaves['casual_taken']} days | Sick: {most_leaves['sick_taken']} days | Earned: {most_leaves['earned_taken']} days
 
- HIGHEST LEAVE CONSUMER 
-  Employee Name:        {most_leaves['username'].upper()}
-  Total Days Taken:     {most_leaves['total_days_taken']} days
-
-  Breakdown by Type:
-    Casual Leave:    {most_leaves['casual_taken']} days
-    Sick Leave:      {most_leaves['sick_taken']} days
-    Earned Leave:    {most_leaves['earned_taken']} days
-
-
-
- LOWEST LEAVE CONSUMER 
-  Employee Name:        {least_leaves['username'].upper()}
-  Total Days Taken:     {least_leaves['total_days_taken']} days
-
-  Breakdown by Type:
-    Casual Leave:    {least_leaves['casual_taken']} days
-    Sick Leave:      {least_leaves['sick_taken']} days
-    Earned Leave:    {least_leaves['earned_taken']} days
-
-
-
+LOWEST LEAVE CONSUMER
+  Employee: {least_leaves['username'].upper()}
+  Total Days: {least_leaves['total_days_taken']} days
+  Casual: {least_leaves['casual_taken']} days | Sick: {least_leaves['sick_taken']} days | Earned: {least_leaves['earned_taken']} days
 
 SECTION 2: YEAR-OVER-YEAR COMPARISON ({current_year - 1} → {current_year})
 
- {most_leaves['username'].upper()} (Highest Consumer) 
-  {current_year - 1}: {most_prev_days:2d} days     →     {current_year}: {most_leaves['total_days_taken']:2d} days
-         Change: {"↑" if most_change > 0 else "→" if most_change == 0 else "↓"} {abs(most_change)} days ({("INCREASE" if most_change > 0 else "STABLE" if most_change == 0 else "DECREASE")}))
+{most_leaves['username'].upper()} (Highest):
+  {current_year - 1}: {most_prev_days} days → {current_year}: {most_leaves['total_days_taken']} days | Change: {abs(most_change)} days {'INCREASE' if most_change > 0 else 'STABLE' if most_change == 0 else 'DECREASE'}
 
-
- {least_leaves['username'].upper()} (Lowest Consumer) 
-  {current_year - 1}: {least_prev_days:2d} days     →     {current_year}: {least_leaves['total_days_taken']:2d} days
-         Change: {"↑" if least_change > 0 else "→" if least_change == 0 else "↓"} {abs(least_change)} days ({("INCREASE" if least_change > 0 else "STABLE" if least_change == 0 else "DECREASE")}))
-
-"""
+{least_leaves['username'].upper()} (Lowest):
+  {current_year - 1}: {least_prev_days} days → {current_year}: {least_leaves['total_days_taken']} days | Change: {abs(least_change)} days {'INCREASE' if least_change > 0 else 'STABLE' if least_change == 0 else 'DECREASE'}"""
             
             return {"answer": answer, "sources": [{"document": "Employee Analytics"}]}
     
@@ -310,43 +322,19 @@ SECTION 2: YEAR-OVER-YEAR COMPARISON ({current_year - 1} → {current_year})
         total_previous = previous_year_stats['CASUAL']['total_days'] + previous_year_stats['SICK']['total_days'] + previous_year_stats['EARNED']['total_days']
         total_current = current_year_stats['CASUAL']['total_days'] + current_year_stats['SICK']['total_days'] + current_year_stats['EARNED']['total_days']
         
-        answer = f"""
-    LEAVE USAGE COMPARISON REPORT {previous_year} vs {current_year}                       │
+        answer = f"""LEAVE USAGE COMPARISON REPORT: {previous_year} vs {current_year}
 
-ANNUAL OVERVIEW
-
-ORGANIZATION-WIDE LEAVE USAGE 
-  Year {previous_year}:  {total_previous:3d} days total
-  Year {current_year}:  {total_current:3d} days total
-  Net Change: {"↑" if (total_current - total_previous) > 0 else "→" if (total_current - total_previous) == 0 else "↓"} {abs(total_current - total_previous):2d} days
-
+ORGANIZATION-WIDE USAGE
+  {previous_year}: {total_previous} days | {current_year}: {total_current} days | Change: {abs(total_current - total_previous)} days {("INCREASED" if (total_current - total_previous) > 0 else "STABLE" if (total_current - total_previous) == 0 else "DECREASED")}
 
 LEAVE TYPE BREAKDOWN
-
- CASUAL LEAVE 
-  {previous_year}:  {previous_year_stats['CASUAL']['total_days']:3d} days  →  {current_year}:  {current_year_stats['CASUAL']['total_days']:3d} days
-  Change: {"↑" if casual_change > 0 else "→" if casual_change == 0 else "↓"} {abs(casual_change):2d} days {"(INCREASED)" if casual_change > 0 else "(STABLE)" if casual_change == 0 else "(DECREASED)"}
-
-
-SICK LEAVE 
-  {previous_year}:  {previous_year_stats['SICK']['total_days']:3d} days  →  {current_year}:  {current_year_stats['SICK']['total_days']:3d} days
-  Change: {"↑" if sick_change > 0 else "→" if sick_change == 0 else "↓"} {abs(sick_change):2d} days {"(INCREASED)" if sick_change > 0 else "(STABLE)" if sick_change == 0 else "(DECREASED)"}
-
-
-EARNED LEAVE
-
-  {previous_year}:  {previous_year_stats['EARNED']['total_days']:3d} days  →  {current_year}:  {current_year_stats['EARNED']['total_days']:3d} days
-  Change: {"↑" if earned_change > 0 else "→" if earned_change == 0 else "↓"} {abs(earned_change):2d} days {"(INCREASED)" if earned_change > 0 else "(STABLE)" if earned_change == 0 else "(DECREASED)"}
-
+  Casual:  {previous_year_stats['CASUAL']['total_days']} → {current_year_stats['CASUAL']['total_days']} days | Change: {abs(casual_change)} days [{"INCREASED" if casual_change > 0 else "STABLE" if casual_change == 0 else "DECREASED"}]
+  Sick:    {previous_year_stats['SICK']['total_days']} → {current_year_stats['SICK']['total_days']} days | Change: {abs(sick_change)} days [{"INCREASED" if sick_change > 0 else "STABLE" if sick_change == 0 else "DECREASED"}]
+  Earned:  {previous_year_stats['EARNED']['total_days']} → {current_year_stats['EARNED']['total_days']} days | Change: {abs(earned_change)} days [{"INCREASED" if earned_change > 0 else "STABLE" if earned_change == 0 else "DECREASED"}]
 
 KEY INSIGHTS
-
-  Most Utilized Type:  {max([('Casual', current_year_stats['CASUAL']['total_days']), ('Sick', current_year_stats['SICK']['total_days']), ('Earned', current_year_stats['EARNED']['total_days'])], key=lambda x: x[1])[0]} Leave ({max([current_year_stats['CASUAL']['total_days'], current_year_stats['SICK']['total_days'], current_year_stats['EARNED']['total_days']])} days)
-  Total Org Usage:     {total_current} days in {current_year} ({total_previous} in {previous_year})
-
-
-
-"""
+  Most Used: {max([('Casual', current_year_stats['CASUAL']['total_days']), ('Sick', current_year_stats['SICK']['total_days']), ('Earned', current_year_stats['EARNED']['total_days'])], key=lambda x: x[1])[0]} ({max([current_year_stats['CASUAL']['total_days'], current_year_stats['SICK']['total_days'], current_year_stats['EARNED']['total_days']])} days)
+  Total Usage: {total_current} days in {current_year} vs {total_previous} days in {previous_year}"""
         
         return {"answer": answer, "sources": [{"document": "Employee Analytics"}]}
 
@@ -406,57 +394,19 @@ KEY INSIGHTS
 
         if not leave_type:
             return {
-                "answer": f"""
-INCOMPLETE REQUEST
-{'=' * 60}
-
-Please specify which type of leave you want to apply for:
-  • CASUAL Leave
-  • SICK Leave
-  • EARNED Leave
-
-For example: "I want to apply 2 days of casual leave from 15th April"
-
-{'=' * 60}
-""",
+                "answer": "Please specify the leave type: CASUAL, SICK, or EARNED Leave.",
                 "sources": []
             }
 
         if not leave_date:
             return {
-                "answer": f"""
-INCOMPLETE REQUEST
-{'=' * 60}
-
-Leave Type: {leave_type.upper()}
-
-Please specify the date for your leave request.
-
-Format examples:
-  • "15th April" or "April 15"
-  • "15/4" or "15-4"
-
-For example: "I want to apply 2 days of {leave_type.lower()} leave starting 15th April"
-
-{'=' * 60}
-""",
+                "answer": f"Leave Type: {leave_type.upper()}\n\nPlease specify the date for your leave request.",
                 "sources": []
             }
 
         if leave_date < date.today():
             return {
-                "answer": f"""
-INVALID DATE - PAST DATE NOT ALLOWED
-{'=' * 60}
-
-You requested leave for: {leave_date.strftime('%d %B %Y')}
-Today's date: {date.today().strftime('%d %B %Y')}
-
-Leave can only be applied for current or future dates.
-Please select a date from today onwards.
-
-{'=' * 60}
-""",
+                "answer": f"Cannot apply leave for past dates. Requested: {leave_date.strftime('%d %B %Y')}, Today: {date.today().strftime('%d %B %Y')}.",
                 "sources": []
             }
 
@@ -523,9 +473,7 @@ Please contact HR for assistance.
                 suggestions = ", ".join([f"{count} day(s) of {leave_type_name}" for leave_type_name, count in alternative_leaves])
                 
                 return {
-                    "answer": f"""
-INSUFFICIENT CASUAL LEAVE BALANCE
-{'=' * 60}
+                    "answer": f"""INSUFFICIENT CASUAL LEAVE BALANCE
 
 Leave Type: CASUAL
 Days Requested: {days} days
@@ -533,21 +481,16 @@ Balance Available: {casual_remaining} day(s)
 Shortfall: {days - casual_remaining} day(s)
 
 ALTERNATIVE OPTIONS:
-You have:
-  • {alternative_leaves[0][1]} day(s) of {alternative_leaves[0][0]}
-  {"  • " + str(alternative_leaves[1][1]) + " day(s) of " + alternative_leaves[1][0] if len(alternative_leaves) > 1 else ""}
+You can apply for:
+{chr(10).join([f"  • {leave_type_name}: {count} day(s) available" for leave_type_name, count in alternative_leaves])}
 
-Would you like to apply for {alternative_leaves[0][0]} instead for {leave_date.strftime('%d %B %Y')}?
-
-{'=' * 60}
+Please specify which leave type you prefer for {leave_date.strftime('%d %B %Y')}.
 """,
                     "sources": [{"document": "Employee Database"}]
                 }
             else:
                 return {
-                    "answer": f"""
-INSUFFICIENT CASUAL LEAVE BALANCE
-{'=' * 60}
+                    "answer": f"""INSUFFICIENT CASUAL LEAVE BALANCE
 
 Leave Type: CASUAL
 Days Requested: {days} days
@@ -556,8 +499,6 @@ Shortfall: {days - casual_remaining} day(s)
 
 Unfortunately, no alternative leave options are available.
 Please contact HR for assistance.
-
-{'=' * 60}
 """,
                     "sources": [{"document": "Employee Database"}]
                 }
@@ -573,9 +514,7 @@ Please contact HR for assistance.
                 suggestions = ", ".join([f"{count} day(s) of {leave_type_name}" for leave_type_name, count in alternative_leaves])
                 
                 return {
-                    "answer": f"""
-INSUFFICIENT SICK LEAVE BALANCE
-{'=' * 60}
+                    "answer": f"""INSUFFICIENT SICK LEAVE BALANCE
 
 Leave Type: SICK
 Days Requested: {days} days
@@ -583,21 +522,16 @@ Balance Available: {sick_remaining} day(s)
 Shortfall: {days - sick_remaining} day(s)
 
 ALTERNATIVE OPTIONS:
-You have:
-  • {alternative_leaves[0][1]} day(s) of {alternative_leaves[0][0]}
-  {"  • " + str(alternative_leaves[1][1]) + " day(s) of " + alternative_leaves[1][0] if len(alternative_leaves) > 1 else ""}
+You can apply for:
+{chr(10).join([f"  • {leave_type_name}: {count} day(s) available" for leave_type_name, count in alternative_leaves])}
 
-Would you like to apply for {alternative_leaves[0][0]} instead for {leave_date.strftime('%d %B %Y')}?
-
-{'=' * 60}
+Please specify which leave type you prefer for {leave_date.strftime('%d %B %Y')}.
 """,
                     "sources": [{"document": "Employee Database"}]
                 }
             else:
                 return {
-                    "answer": f"""
-INSUFFICIENT SICK LEAVE BALANCE
-{'=' * 60}
+                    "answer": f"""INSUFFICIENT SICK LEAVE BALANCE
 
 Leave Type: SICK
 Days Requested: {days} days
@@ -606,8 +540,6 @@ Shortfall: {days - sick_remaining} day(s)
 
 Unfortunately, no alternative leave options are available.
 Please contact HR for assistance.
-
-{'=' * 60}
 """,
                     "sources": [{"document": "Employee Database"}]
                 }
@@ -623,9 +555,7 @@ Please contact HR for assistance.
                 suggestions = ", ".join([f"{count} day(s) of {leave_type_name}" for leave_type_name, count in alternative_leaves])
                 
                 return {
-                    "answer": f"""
-INSUFFICIENT EARNED LEAVE BALANCE
-{'=' * 60}
+                    "answer": f"""INSUFFICIENT EARNED LEAVE BALANCE
 
 Leave Type: EARNED
 Days Requested: {days} days
@@ -633,13 +563,10 @@ Balance Available: {earned_remaining} day(s)
 Shortfall: {days - earned_remaining} day(s)
 
 ALTERNATIVE OPTIONS:
-You have:
-  • {alternative_leaves[0][1]} day(s) of {alternative_leaves[0][0]}
-  {"  • " + str(alternative_leaves[1][1]) + " day(s) of " + alternative_leaves[1][0] if len(alternative_leaves) > 1 else ""}
+You can apply for:
+{chr(10).join([f"  • {leave_type_name}: {count} day(s) available" for leave_type_name, count in alternative_leaves])}
 
-Would you like to apply for {alternative_leaves[0][0]} instead for {leave_date.strftime('%d %B %Y')}?
-
-{'=' * 60}
+Please specify which leave type you prefer for {leave_date.strftime('%d %B %Y')}.
 """,
                     "sources": [{"document": "Employee Database"}]
                 }
@@ -701,7 +628,7 @@ You will be notified once it is approved or requires modifications.
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=5,
+        n_results=3, 
         include=["documents", "metadatas", "distances"]
     )
 
@@ -713,7 +640,7 @@ You will be notified once it is approved or requires modifications.
     filtered_sources = []
 
     for doc, meta, dist in zip(docs, metas, dists):
-        if dist <= 1.3:
+        if dist <= 1.1: 
             filtered_docs.append(doc)
             filtered_sources.append({
                 "document": meta.get("source"),
@@ -721,7 +648,7 @@ You will be notified once it is approved or requires modifications.
             })
 
     unique_sources = {(s["document"], s["page"]): s for s in filtered_sources}
-    final_sources = list(unique_sources.values())[:2]
+    final_sources = list(unique_sources.values())[:1] 
 
     policy_context = "\n\n".join(filtered_docs)
 

@@ -3,10 +3,13 @@ import csv
 from datetime import datetime, date
 from typing import List, Dict, Optional
 import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
 from reportlab.lib import colors
 from sqlalchemy.orm import Session
 
@@ -133,6 +136,98 @@ def generate_excel_report(db: Session, year: int = None) -> io.BytesIO:
     return output
 
 
+def generate_leave_type_pie_chart(stats: List[Dict]) -> io.BytesIO:
+    """Generate a pie chart showing leave type distribution"""
+    total_casual = sum([emp["casual_taken"] for emp in stats])
+    total_sick = sum([emp["sick_taken"] for emp in stats])
+    total_earned = sum([emp["earned_taken"] for emp in stats])
+    
+    fig, ax = plt.subplots(figsize=(6, 5))
+    fig.patch.set_facecolor('white')
+    
+    leaves = [total_casual, total_sick, total_earned]
+    labels = ['Casual Leave', 'Sick Leave', 'Earned Leave']
+    colors_pie = ['#3498db', '#e74c3c', '#2ecc71']
+    
+    if sum(leaves) > 0:
+        ax.pie(leaves, labels=labels, autopct='%1.1f%%', colors=colors_pie, startangle=90)
+        ax.set_title('Leave Distribution By Type', fontsize=14, fontweight='bold', pad=20)
+    else:
+        ax.text(0.5, 0.5, 'No Data Available', ha='center', va='center', fontsize=12)
+    
+    chart_image = io.BytesIO()
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    chart_image.seek(0)
+    plt.close(fig)
+    return chart_image
+
+
+def generate_top_employees_chart(stats: List[Dict], limit: int = 5) -> io.BytesIO:
+    """Generate a bar chart showing top employees by leave usage"""
+    top_stats = stats[:limit]
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    fig.patch.set_facecolor('white')
+    
+    names = [emp["username"].upper() for emp in top_stats]
+    total_days = [emp["total_days_taken"] for emp in top_stats]
+    casual = [emp["casual_taken"] for emp in top_stats]
+    sick = [emp["sick_taken"] for emp in top_stats]
+    earned = [emp["earned_taken"] for emp in top_stats]
+    
+    x = range(len(names))
+    width = 0.25
+    
+    ax.bar([i - width for i in x], casual, width, label='Casual', color='#3498db')
+    ax.bar(x, sick, width, label='Sick', color='#e74c3c')
+    ax.bar([i + width for i in x], earned, width, label='Earned', color='#2ecc71')
+    
+    ax.set_ylabel('Days', fontsize=11, fontweight='bold')
+    ax.set_title('Top Employees by Leave Consumption', fontsize=14, fontweight='bold', pad=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    
+    chart_image = io.BytesIO()
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    chart_image.seek(0)
+    plt.close(fig)
+    return chart_image
+
+
+def generate_leave_type_bar_chart(stats: List[Dict]) -> io.BytesIO:
+    """Generate a bar chart showing total leave usage by type"""
+    total_casual = sum([emp["casual_taken"] for emp in stats])
+    total_sick = sum([emp["sick_taken"] for emp in stats])
+    total_earned = sum([emp["earned_taken"] for emp in stats])
+    
+    fig, ax = plt.subplots(figsize=(7, 5))
+    fig.patch.set_facecolor('white')
+    
+    leave_types = ['Casual Leave', 'Sick Leave', 'Earned Leave']
+    totals = [total_casual, total_sick, total_earned]
+    colors_bar = ['#3498db', '#e74c3c', '#2ecc71']
+    
+    bars = ax.bar(leave_types, totals, color=colors_bar, edgecolor='black', linewidth=1.5)
+    
+    for bar, total in zip(bars, totals):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{int(height)} days',
+                ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    ax.set_ylabel('Total Days', fontsize=11, fontweight='bold')
+    ax.set_title('Overall Leave Type Consumption', fontsize=14, fontweight='bold', pad=20)
+    ax.grid(axis='y', alpha=0.3)
+    
+    chart_image = io.BytesIO()
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    chart_image.seek(0)
+    plt.close(fig)
+    return chart_image
+
+
 def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
     stats = get_leave_statistics(db, year)
     current_year = year or datetime.today().year
@@ -167,11 +262,97 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
     elements.append(Spacer(1, 0.3*inch))
     
     if stats:
-        elements.append(Paragraph("SECTION 1: CURRENT YEAR LEAVE CONSUMPTION", heading_style))
+        elements.append(Paragraph("DASHBOARD - LEAVE OVERVIEW", heading_style))
         elements.append(Spacer(1, 0.1*inch))
+        
+        total_employees = len(stats)
+        total_casual = sum([emp["casual_taken"] for emp in stats])
+        total_sick = sum([emp["sick_taken"] for emp in stats])
+        total_earned = sum([emp["earned_taken"] for emp in stats])
+        total_leaves_taken = sum([emp["total_days_taken"] for emp in stats])
+        avg_leaves = round(total_leaves_taken / total_employees, 1) if total_employees > 0 else 0
         
         highest = stats[0]
         lowest = stats[-1]
+        
+        dashboard_data = [
+            ["METRIC", "VALUE"],
+            ["Total Employees", str(total_employees)],
+            ["Total Organization Leave Days", str(total_leaves_taken) + " days"],
+            ["Average per Employee", str(avg_leaves) + " days"],
+            ["", ""],
+            ["LEAVE TYPE BREAKDOWN (Organization-wide)", ""],
+            ["Casual Leave Used", str(total_casual) + " days"],
+            ["Sick Leave Used", str(total_sick) + " days"],
+            ["Earned Leave Used", str(total_earned) + " days"],
+            ["", ""],
+            ["HIGHLIGHTS", ""],
+            ["Highest Consumer", highest["username"].upper() + f" ({highest['total_days_taken']} days)"],
+            ["Lowest Consumer", lowest["username"].upper() + f" ({lowest['total_days_taken']} days)"],
+        ]
+        
+        dashboard_table = Table(dashboard_data, colWidths=[3*inch, 2.5*inch])
+        dashboard_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ecf0f1')),
+            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#ecf0f1')),
+            ('BACKGROUND', (0, 5), (-1, 5), colors.HexColor('#3498db')),
+            ('TEXTCOLOR', (0, 5), (-1, 5), colors.whitesmoke),
+            ('FONTNAME', (0, 5), (-1, 5), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 10), (-1, 10), colors.HexColor('#e74c3c')),
+            ('TEXTCOLOR', (0, 10), (-1, 10), colors.whitesmoke),
+            ('FONTNAME', (0, 10), (-1, 10), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 11), (-1, 12), colors.HexColor('#f8d7da')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(dashboard_table)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        elements.append(Paragraph("DASHBOARD CHARTS", heading_style))
+        elements.append(Spacer(1, 0.15*inch))
+        
+        try:
+            pie_chart = generate_leave_type_pie_chart(stats)
+            pie_image = Image(pie_chart, width=3.5*inch, height=3*inch)
+            elements.append(pie_image)
+            elements.append(Spacer(1, 0.1*inch))
+        except Exception as e:
+            elements.append(Paragraph(f"<i>Chart generation error: {str(e)}</i>", styles['Normal']))
+        
+        elements.append(Spacer(1, 0.2*inch))
+        
+        try:
+            bar_chart = generate_leave_type_bar_chart(stats)
+            bar_image = Image(bar_chart, width=3.5*inch, height=3*inch)
+            elements.append(bar_image)
+            elements.append(Spacer(1, 0.1*inch))
+        except Exception as e:
+            elements.append(Paragraph(f"<i>Chart generation error: {str(e)}</i>", styles['Normal']))
+        
+        elements.append(PageBreak())
+        
+        try:
+            top_chart = generate_top_employees_chart(stats, limit=5)
+            top_image = Image(top_chart, width=5.5*inch, height=3.5*inch)
+            elements.append(top_image)
+            elements.append(Spacer(1, 0.2*inch))
+        except Exception as e:
+            elements.append(Paragraph(f"<i>Chart generation error: {str(e)}</i>", styles['Normal']))
+        
+        elements.append(Spacer(1, 0.2*inch))
+        
+        elements.append(Paragraph("SECTION 1: CURRENT YEAR LEAVE CONSUMPTION", heading_style))
         
         elements.append(Paragraph("<b>HIGHEST LEAVE CONSUMER</b>", styles['Heading3']))
         highest_data = [
