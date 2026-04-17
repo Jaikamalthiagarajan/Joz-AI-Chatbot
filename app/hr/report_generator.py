@@ -137,37 +137,44 @@ def generate_excel_report(db: Session, year: int = None) -> io.BytesIO:
 
 
 def generate_leave_type_pie_chart(stats: List[Dict]) -> io.BytesIO:
-    """Generate a pie chart showing leave type distribution"""
     total_casual = sum([emp["casual_taken"] for emp in stats])
     total_sick = sum([emp["sick_taken"] for emp in stats])
     total_earned = sum([emp["earned_taken"] for emp in stats])
     
-    fig, ax = plt.subplots(figsize=(6, 5))
-    fig.patch.set_facecolor('white')
+    fig, ax = plt.subplots(figsize=(7, 6))
+    fig.patch.set_facecolor('#f8f9fa')
+    ax.set_facecolor('#f8f9fa')
     
     leaves = [total_casual, total_sick, total_earned]
     labels = ['Casual Leave', 'Sick Leave', 'Earned Leave']
-    colors_pie = ['#3498db', '#e74c3c', '#2ecc71']
+    colors_pie = ['#1f77b4', '#d62728', '#2ca02c']
+    explode = (0.05, 0.05, 0.05)
     
     if sum(leaves) > 0:
-        ax.pie(leaves, labels=labels, autopct='%1.1f%%', colors=colors_pie, startangle=90)
-        ax.set_title('Leave Distribution By Type', fontsize=14, fontweight='bold', pad=20)
+        wedges, texts, autotexts = ax.pie(leaves, labels=labels, autopct='%1.1f%%', 
+                                           colors=colors_pie, startangle=90, explode=explode,
+                                           textprops={'fontsize': 11, 'weight': 'bold'})
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontsize(10)
+        ax.set_title('Leave Distribution By Type', fontsize=14, fontweight='bold', 
+                    pad=20, color='#1a1a1a')
     else:
         ax.text(0.5, 0.5, 'No Data Available', ha='center', va='center', fontsize=12)
     
     chart_image = io.BytesIO()
-    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight', facecolor='#f8f9fa')
     chart_image.seek(0)
     plt.close(fig)
     return chart_image
 
 
 def generate_top_employees_chart(stats: List[Dict], limit: int = 5) -> io.BytesIO:
-    """Generate a bar chart showing top employees by leave usage"""
     top_stats = stats[:limit]
     
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.patch.set_facecolor('white')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor('#f8f9fa')
+    ax.set_facecolor('#f8f9fa')
     
     names = [emp["username"].upper() for emp in top_stats]
     total_days = [emp["total_days_taken"] for emp in top_stats]
@@ -178,51 +185,66 @@ def generate_top_employees_chart(stats: List[Dict], limit: int = 5) -> io.BytesI
     x = range(len(names))
     width = 0.25
     
-    ax.bar([i - width for i in x], casual, width, label='Casual', color='#3498db')
-    ax.bar(x, sick, width, label='Sick', color='#e74c3c')
-    ax.bar([i + width for i in x], earned, width, label='Earned', color='#2ecc71')
+    bars1 = ax.bar([i - width for i in x], casual, width, label='Casual', color='#1f77b4', edgecolor='#0d3b66', linewidth=1.2)
+    bars2 = ax.bar(x, sick, width, label='Sick', color='#d62728', edgecolor='#a01d1d', linewidth=1.2)
+    bars3 = ax.bar([i + width for i in x], earned, width, label='Earned', color='#2ca02c', edgecolor='#1a6b1a', linewidth=1.2)
     
-    ax.set_ylabel('Days', fontsize=11, fontweight='bold')
-    ax.set_title('Top Employees by Leave Consumption', fontsize=14, fontweight='bold', pad=20)
+    ax.set_ylabel('Days', fontsize=12, fontweight='bold', color='#1a1a1a')
+    ax.set_xlabel('Employee', fontsize=12, fontweight='bold', color='#1a1a1a')
+    ax.set_title('Top 5 Employees by Leave Consumption', fontsize=14, fontweight='bold', pad=20, color='#1a1a1a')
     ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=45, ha='right')
-    ax.legend()
-    ax.grid(axis='y', alpha=0.3)
+    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=10)
+    ax.legend(loc='upper left', fontsize=10, framealpha=0.95)
+    ax.grid(axis='y', alpha=0.4, linestyle='--', color='gray')
+    ax.set_axisbelow(True)
+    
+    for bars in [bars1, bars2, bars3]:
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}',
+                       ha='center', va='bottom', fontsize=9, fontweight='bold')
     
     chart_image = io.BytesIO()
-    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight', facecolor='#f8f9fa')
     chart_image.seek(0)
     plt.close(fig)
     return chart_image
 
 
 def generate_leave_type_bar_chart(stats: List[Dict]) -> io.BytesIO:
-    """Generate a bar chart showing total leave usage by type"""
     total_casual = sum([emp["casual_taken"] for emp in stats])
     total_sick = sum([emp["sick_taken"] for emp in stats])
     total_earned = sum([emp["earned_taken"] for emp in stats])
+    total = total_casual + total_sick + total_earned
     
-    fig, ax = plt.subplots(figsize=(7, 5))
-    fig.patch.set_facecolor('white')
+    fig, ax = plt.subplots(figsize=(9, 6))
+    fig.patch.set_facecolor('#f8f9fa')
+    ax.set_facecolor('#f8f9fa')
     
     leave_types = ['Casual Leave', 'Sick Leave', 'Earned Leave']
     totals = [total_casual, total_sick, total_earned]
-    colors_bar = ['#3498db', '#e74c3c', '#2ecc71']
+    colors_bar = ['#1f77b4', '#d62728', '#2ca02c']
     
-    bars = ax.bar(leave_types, totals, color=colors_bar, edgecolor='black', linewidth=1.5)
+    bars = ax.bar(leave_types, totals, color=colors_bar, edgecolor='#0d3b66', linewidth=2, width=0.6)
     
-    for bar, total in zip(bars, totals):
+    for bar, total_val in zip(bars, totals):
         height = bar.get_height()
+        percentage = (total_val / total * 100) if total > 0 else 0
         ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)} days',
-                ha='center', va='bottom', fontsize=10, fontweight='bold')
+                f'{int(height)} days\n({percentage:.1f}%)',
+                ha='center', va='bottom', fontsize=11, fontweight='bold', color='#1a1a1a')
     
-    ax.set_ylabel('Total Days', fontsize=11, fontweight='bold')
-    ax.set_title('Overall Leave Type Consumption', fontsize=14, fontweight='bold', pad=20)
-    ax.grid(axis='y', alpha=0.3)
+    ax.set_ylabel('Total Days', fontsize=12, fontweight='bold', color='#1a1a1a')
+    ax.set_title('Organization-wide Leave Type Consumption', fontsize=14, fontweight='bold', pad=20, color='#1a1a1a')
+    ax.set_ylim(0, max(totals) * 1.15)
+    ax.grid(axis='y', alpha=0.4, linestyle='--', color='gray')
+    ax.set_axisbelow(True)
+    ax.tick_params(colors='#1a1a1a')
     
     chart_image = io.BytesIO()
-    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight')
+    plt.savefig(chart_image, format='png', dpi=100, bbox_inches='tight', facecolor='#f8f9fa')
     chart_image.seek(0)
     plt.close(fig)
     return chart_image
@@ -240,19 +262,21 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.HexColor('#2c3e50'),
+        fontSize=18,
+        textColor=colors.HexColor('#0d3b66'),
         spaceAfter=12,
-        alignment=1  
+        alignment=1,
+        fontName='Helvetica-Bold'
     )
     
     heading_style = ParagraphStyle(
         'CustomHeading',
         parent=styles['Heading2'],
-        fontSize=12,
-        textColor=colors.HexColor('#34495e'),
-        spaceAfter=8,
-        spaceBefore=8
+        fontSize=13,
+        textColor=colors.HexColor('#1f77b4'),
+        spaceAfter=10,
+        spaceBefore=10,
+        fontName='Helvetica-Bold'
     )
     
     elements = []
@@ -293,28 +317,30 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
         
         dashboard_table = Table(dashboard_data, colWidths=[3*inch, 2.5*inch])
         dashboard_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d3b66')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 14),
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ecf0f1')),
-            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
-            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#ecf0f1')),
-            ('BACKGROUND', (0, 5), (-1, 5), colors.HexColor('#3498db')),
-            ('TEXTCOLOR', (0, 5), (-1, 5), colors.whitesmoke),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#e8f1f8')),
+            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#e8f1f8')),
+            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#e8f1f8')),
+            ('BACKGROUND', (0, 5), (-1, 5), colors.HexColor('#1f77b4')),
+            ('TEXTCOLOR', (0, 5), (-1, 5), colors.white),
             ('FONTNAME', (0, 5), (-1, 5), 'Helvetica-Bold'),
-            ('BACKGROUND', (0, 10), (-1, 10), colors.HexColor('#e74c3c')),
-            ('TEXTCOLOR', (0, 10), (-1, 10), colors.whitesmoke),
+            ('FONTSIZE', (0, 5), (-1, 5), 11),
+            ('BACKGROUND', (0, 10), (-1, 10), colors.HexColor('#d62728')),
+            ('TEXTCOLOR', (0, 10), (-1, 10), colors.white),
             ('FONTNAME', (0, 10), (-1, 10), 'Helvetica-Bold'),
-            ('BACKGROUND', (0, 11), (-1, 12), colors.HexColor('#f8d7da')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('FONTSIZE', (0, 10), (-1, 10), 11),
+            ('BACKGROUND', (0, 11), (-1, 12), colors.HexColor('#ffe8e8')),
+            ('GRID', (0, 0), (-1, -1), 1.5, colors.HexColor('#0d3b66')),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
         ]))
         elements.append(dashboard_table)
         elements.append(Spacer(1, 0.3*inch))
@@ -368,9 +394,13 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
         highest_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#2c3e50')),
-            ('BACKGROUND', (0, 0), (0, 3), colors.HexColor('#ecf0f1')),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#0d3b66')),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 0), (0, 3), colors.HexColor('#e8f1f8')),
+            ('BACKGROUND', (1, 0), (1, -1), colors.HexColor('#fff8e8')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#1f77b4')),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(highest_table)
         elements.append(Spacer(1, 0.2*inch))
@@ -389,9 +419,13 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
         lowest_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#2c3e50')),
-            ('BACKGROUND', (0, 0), (0, 3), colors.HexColor('#ecf0f1')),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#0d3b66')),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 0), (0, 3), colors.HexColor('#e8f1f8')),
+            ('BACKGROUND', (1, 0), (1, -1), colors.HexColor('#e8f8e8')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2ca02c')),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(lowest_table)
         elements.append(Spacer(1, 0.3*inch))
@@ -414,15 +448,18 @@ def generate_pdf_report(db: Session, year: int = None) -> io.BytesIO:
         
         summary_table = Table(table_data, colWidths=[1*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch])
         summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f77b4')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f0f4f8')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#e8f1f8')]),
+            ('GRID', (0, 0), (-1, -1), 1.2, colors.HexColor('#1f77b4')),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(summary_table)
     
